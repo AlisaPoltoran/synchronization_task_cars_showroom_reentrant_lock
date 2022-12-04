@@ -1,9 +1,9 @@
-import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.spi.AbstractResourceBundleProvider;
 
 public class Showroom {
     private List<String> cars = new ArrayList<>();
@@ -12,9 +12,11 @@ public class Showroom {
     private int customersCounter = 0;
 
     Lock lock = new ReentrantLock(true);
+    Condition condition = lock.newCondition();
 
     final int MANUFACTURING_TIME = 3000;
     final int NUMBER_OF_PRODUCTION = 10;
+    final int CUSTOMERS_PATIENCE = 3500;
 
     public void produce() {
         while (!Thread.currentThread().isInterrupted()) {
@@ -23,8 +25,9 @@ public class Showroom {
                 carsCounter += 1;
                 String car = "Новый автомобиль " + carsCounter;
                 cars.add(car);
-                System.out.println("Toyota произвела " + car);
+                System.out.println("+++++ Toyota произвела " + car);
                 System.out.println(cars);
+                condition.signalAll();
                 Thread.sleep(MANUFACTURING_TIME);
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -49,10 +52,10 @@ public class Showroom {
             } finally {
                 lock.unlock();
             }
-            this.sellCar();
-
             if (carsCounter == NUMBER_OF_PRODUCTION)
                 Thread.currentThread().interrupt();
+
+            this.sellCar();
         }
     }
 
@@ -60,10 +63,15 @@ public class Showroom {
         try {
             lock.lock();
             if (this.hasCar()) {
-                System.out.println(cars.remove(0) + " забрал довольный " + customers.remove(0));
+                System.out.println("------" + cars.remove(0) + " забрал довольный " + customers.remove(0));
+            } else if (carsCounter < NUMBER_OF_PRODUCTION){
+                condition.await();
+                System.out.println("..... " + customers.remove(0) + " ждет авто");
             } else {
-                System.out.println("Недовольный " + customers.remove(0) + " ушел домой без авто");
+                System.out.println("Производство окончено и грустный " + customers.remove(0) + " ушел домой");
             }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         } finally {
             lock.unlock();
         }
